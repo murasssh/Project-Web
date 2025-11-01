@@ -1,0 +1,24 @@
+{
+  "name": "login-menu",
+  "version": "1.0.0",
+  "description": "A simple login menu with admin functionality.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "body-parser": "^1.19.0",
+    "express-session": "^1.17.3"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.7"
+  },
+  "keywords": [
+    "login",
+    "admin",
+    "authentication"
+  ],
+  "author": "Your Name",
+  "license": "ISC"
+}

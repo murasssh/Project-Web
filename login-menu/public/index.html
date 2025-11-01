@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Login</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <main class="card" role="main" aria-labelledby="loginTitle">
+    <h1 id="loginTitle">LOGIN</h1>
+    <p class="lead">Entre com seu nome de usuário e senha.</p>
+
+    <form id="loginForm" novalidate>
+      <div class="field">
+        <label for="username">Nome de usuário</label>
+        <input id="username" name="username" type="text" autocomplete="username" required />
+        <div id="usernameError" class="error" aria-live="polite"></div>
+      </div>
+
+      <div class="field">
+        <label for="password">Senha</label>
+        <div class="password-row">
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+          <button type="button" id="togglePassword" class="toggle-pass" aria-pressed="false" aria-label="Mostrar senha">Mostrar</button>
+        </div>
+        <div id="passwordError" class="error" aria-live="polite"></div>
+      </div>
+
+      <div class="row">
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;">
+          <input id="remember" name="remember" type="checkbox" />
+          Lembrar de mim
+        </label>
+      </div>
+
+      <div class="actions">
+        <button type="submit">Entrar</button>
+        <button type="button" class="secondary" id="registerBtn">Registrar</button>
+      </div>
+
+      <div id="status" aria-live="polite"></div>
+    </form>
+  </main>
+
+  <script src="js/auth.js"></script>
+</body>
+</html>
