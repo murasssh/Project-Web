@@ -1,44 +1,37 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Login</title>
-  <link rel="stylesheet" href="css/styles.css" />
   <style>
-    :root{--bg:#0b0b0b;--card:#0f0f0f;--muted:#bfbfbf;--accent:#c9001b}
+    :root{--accent:#c9001b;--muted:#bbb;--bg:#020204}
+    *{box-sizing:border-box}
     html,body{height:100%;margin:0}
     body{
-      background:var(--bg);
-      color:#fff;
-      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:24px;
+      margin:0;background:var(--bg);color:#fff;font-family:Inter,system-ui,monospace;
+      display:flex;align-items:center;justify-content:center;padding:24px;overflow:hidden;
     }
-    .card{
-      background:linear-gradient(180deg,var(--card),#070707);
-      padding:28px;
-      border-radius:12px;
-      box-shadow:0 10px 30px rgba(0,0,0,0.6);
-      max-width:640px;
-      width:100%;
-      text-align:center;
-    }
-    h1{margin:0 0 8px;font-size:22px}
-    p{margin:0;color:var(--muted);font-size:16px}
-    .meta{margin-top:16px}
-    a.return{
-      display:inline-block;
-      margin-top:12px;
-      color:var(--accent);
-      text-decoration:none;
-      font-weight:600;
-    }
+    .card{width:100%;max-width:420px;border-radius:10px;padding:26px;background:linear-gradient(180deg,#0e0e0e,#0b0b0b);box-shadow:0 8px 30px rgba(0,0,0,0.6);position:relative;z-index:1;}
+    h1{margin:0 0 8px;font-size:20px}
+    p.lead{margin:0 0 16px;color:var(--muted);font-size:14px}
+    label{display:block;font-size:13px;margin-bottom:6px;color:#ddd}
+    .field{margin-bottom:12px}
+    input[type="text"],input[type="password"]{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #222;background:#111;color:#fff;font-size:14px}
+    .actions{display:flex;gap:8px;margin-top:14px}
+    button{background:var(--accent);color:#fff;border:none;padding:10px 14px;border-radius:8px;cursor:pointer}
+    button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.08);color:var(--accent)}
+    .muted{color:var(--muted);font-size:13px;margin-top:10px}
+    .error{color:#ff6b6b;font-size:13px;margin-top:6px;display:none}
+    a.textlink{color:var(--accent);text-decoration:none;font-weight:600}
+    @media (max-width:420px){.card{padding:18px}}
+    /* small canvas background */
+    #matrixCanvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;display:block;background:transparent;}
   </style>
 </head>
 <body>
+  <canvas id="matrixCanvas" aria-hidden="true"></canvas>
+
   <main class="card" role="main" aria-labelledby="loginTitle">
     <h1 id="loginTitle">LOGIN</h1>
     <p class="lead">Entre com seu nome de usuário e senha.</p>
@@ -52,18 +45,8 @@
 
       <div class="field">
         <label for="password">Senha</label>
-        <div class="password-row">
-          <input id="password" name="password" type="password" autocomplete="current-password" required />
-          <button type="button" id="togglePassword" class="toggle-pass" aria-pressed="false" aria-label="Mostrar senha">Mostrar</button>
-        </div>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
         <div id="passwordError" class="error" aria-live="polite"></div>
-      </div>
-
-      <div class="row">
-        <label style="display:flex;gap:8px;align-items:center;font-size:13px;">
-          <input id="remember" name="remember" type="checkbox" />
-          Lembrar de mim
-        </label>
       </div>
 
       <div class="actions">
@@ -71,18 +54,84 @@
         <button type="button" class="secondary" id="registerBtn">Registrar</button>
       </div>
 
-      <div id="status" aria-live="polite"></div>
+      <div id="status" class="muted" aria-live="polite"></div>
     </form>
   </main>
 
-  <main class="card" role="main" aria-labelledby="pageTitle">
-    <h1 id="pageTitle">Página de membro</h1>
-    <p>Em reformas</p>
-    <div class="meta">
-      <a class="return" href="index.html">Voltar ao login</a>
-    </div>
-  </main>
+  <script>
+  (function(){
+    /* visual canvas (leve) */
+    const c = document.getElementById('matrixCanvas'), ctx = c.getContext('2d');
+    function fit(){ const d = devicePixelRatio||1; c.width = innerWidth*d; c.height = innerHeight*d; c.style.width = innerWidth+'px'; c.style.height = innerHeight+'px'; ctx.setTransform(d,0,0,d,0,0); }
+    window.addEventListener('resize', fit); fit();
+    // simples efeito de pontos
+    let t=0; function anim(){ ctx.clearRect(0,0,innerWidth,innerHeight); for(let i=0;i<60;i++){ const x=(i*37+t*0.5)%innerWidth, y=(Math.sin((t+i)/20)*30)+(innerHeight/2); ctx.fillStyle='rgba(255,30,30,0.03)'; ctx.fillRect(x,y,6,6);} t+=1; requestAnimationFrame(anim);} anim();
 
-  <script src="js/auth.js"></script>
+    /* credenciais admin fornecidas pelo usuário (serão hashed no cliente) */
+    const ADMIN_USERNAME = 'm64x';
+    const ADMIN_PASSWORD = 'Mur4sxz1512@';
+
+    /* IndexedDB helpers */
+    function openDB(){ return new Promise((res,rej)=>{ const r = indexedDB.open('loginDB',1); r.onupgradeneeded = ()=>{ const db = r.result; if(!db.objectStoreNames.contains('users')) db.createObjectStore('users',{keyPath:'username'}); }; r.onsuccess = ()=>res(r.result); r.onerror = ()=>rej(r.error); }); }
+    async function getUser(username){ const db = await openDB(); return new Promise((res,rej)=>{ const tx = db.transaction('users','readonly'); const store = tx.objectStore('users'); const q = store.get(username); q.onsuccess = ()=>res(q.result); q.onerror = ()=>rej(q.error); }); }
+    async function addUser(user){ const db = await openDB(); return new Promise((res,rej)=>{ const tx = db.transaction('users','readwrite'); const store = tx.objectStore('users'); const q = store.add(user); q.onsuccess = ()=>res(q.result); q.onerror = ()=>rej(q.error); }); }
+    function genSalt(){ const a = new Uint8Array(16); crypto.getRandomValues(a); return btoa(String.fromCharCode(...a)); }
+    async function hashWithSalt(password, saltBase64){ const enc = new TextEncoder(); const salt = Uint8Array.from(atob(saltBase64), c=>c.charCodeAt(0)); const p = enc.encode(password); const comb = new Uint8Array(salt.length + p.length); comb.set(salt,0); comb.set(p,salt.length); const dig = await crypto.subtle.digest('SHA-256', comb); return Array.from(new Uint8Array(dig)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
+
+    /* seed do admin (se existir, não sobrescreve) */
+    async function ensureAdmin(){
+      try{
+        const ex = await getUser(ADMIN_USERNAME);
+        if(ex) return;
+        const salt = genSalt();
+        const passHash = await hashWithSalt(ADMIN_PASSWORD, salt);
+        await addUser({ username: ADMIN_USERNAME, salt, passHash, role:'admin', created:Date.now() });
+        console.log('Admin criado em IndexedDB');
+      }catch(e){ console.error('Erro seed admin', e); }
+    }
+
+    /* UI + auth */
+    const form = document.getElementById('loginForm'), usernameEl = document.getElementById('username'), passwordEl = document.getElementById('password');
+    const usernameError = document.getElementById('usernameError'), passwordError = document.getElementById('passwordError'), status = document.getElementById('status');
+    function show(el,msg){ el.textContent = msg; el.style.display = msg? 'block':'none'; }
+    document.getElementById('registerBtn').addEventListener('click', async ()=>{
+      show(usernameError,''); show(passwordError,''); status.textContent='';
+      const u = usernameEl.value.trim(), p = passwordEl.value;
+      if(!u){ show(usernameError,'Insira nome de usuário.'); return; }
+      if(u === ADMIN_USERNAME){ show(usernameError,'Usuário reservado.'); return; }
+      if(!p || p.length < 4){ show(passwordError,'Senha mínima 4 caracteres.'); return; }
+      status.textContent = 'Registrando...';
+      try{
+        const found = await getUser(u);
+        if(found){ status.textContent = 'Usuário já existe.'; return; }
+        const salt = genSalt(); const passHash = await hashWithSalt(p, salt);
+        await addUser({ username: u, salt, passHash, role:'user', created:Date.now() });
+        status.textContent = 'Registrado: ' + u;
+      }catch(e){ console.error(e); status.textContent = 'Erro ao registrar.'; }
+    });
+
+    form.addEventListener('submit', async (ev)=>{
+      ev.preventDefault(); show(usernameError,''); show(passwordError,''); status.textContent='';
+      const u = usernameEl.value.trim(), p = passwordEl.value;
+      if(!u){ show(usernameError,'Por favor insira o nome de usuário.'); return; }
+      if(!p){ show(passwordError,'Por favor insira a senha.'); return; }
+      status.textContent = 'Verificando...';
+      try{
+        const user = await getUser(u);
+        if(!user){ status.textContent = 'Usuário não encontrado.'; return; }
+        const hash = await hashWithSalt(p, user.salt);
+        if(hash !== user.passHash){ status.textContent = 'Usuário ou senha incorretos.'; return; }
+        // sucesso: guarda em sessionStorage e redireciona
+        sessionStorage.setItem('user', u);
+        sessionStorage.setItem('role', user.role || 'user');
+        status.textContent = '';
+        if(user.role === 'admin') location.href = 'admin.html';
+        else location.href = 'dashboard.html';
+      }catch(e){ console.error(e); status.textContent = 'Erro ao efetuar login.'; }
+    });
+
+    ensureAdmin();
+  })();
+  </script>
 </body>
 </html>
