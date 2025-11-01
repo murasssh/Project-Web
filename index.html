@@ -1,32 +1,49 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Login</title>
   <style>
+    @font-face{
+      font-family: 'CaskaydiaCove';
+      src: url('../Fonts/CaskaydiaCoveNerdFont-Bold.woff2') format('woff2'),
+           url('../Fonts/CaskaydiaCoveNerdFont-Bold.woff') format('woff'),
+           url('../Fonts/CaskaydiaCoveNerdFont-Bold.ttf') format('truetype');
+      font-weight:700;
+      font-style:normal;
+      font-display:swap;
+    }
     :root{--accent:#c9001b;--muted:#bbb;--bg:#020204}
     *{box-sizing:border-box}
-    html,body{height:100%;margin:0}
+    html,body{height:100%}
     body{
-      margin:0;background:var(--bg);color:#fff;font-family:Inter,system-ui,monospace;
-      display:flex;align-items:center;justify-content:center;padding:24px;overflow:hidden;
+      margin:0;
+      font-family: 'CaskaydiaCove', Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background:var(--bg);
+      color:#fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      overflow:hidden;
     }
+    #matrixCanvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;display:block;background:transparent;}
     .card{width:100%;max-width:420px;border-radius:10px;padding:26px;background:linear-gradient(180deg,#0e0e0e,#0b0b0b);box-shadow:0 8px 30px rgba(0,0,0,0.6);position:relative;z-index:1;}
     h1{margin:0 0 8px;font-size:20px}
     p.lead{margin:0 0 16px;color:var(--muted);font-size:14px}
     label{display:block;font-size:13px;margin-bottom:6px;color:#ddd}
     .field{margin-bottom:12px}
-    input[type="text"],input[type="password"]{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #222;background:#111;color:#fff;font-size:14px}
+    input[type="text"],input[type="password"]{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #222;background:#111;color:#fff;font-size:14px;}
+    .row{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted)}
     .actions{display:flex;gap:8px;margin-top:14px}
     button{background:var(--accent);color:#fff;border:none;padding:10px 14px;border-radius:8px;cursor:pointer}
     button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.08);color:var(--accent)}
-    .muted{color:var(--muted);font-size:13px;margin-top:10px}
     .error{color:#ff6b6b;font-size:13px;margin-top:6px;display:none}
-    a.textlink{color:var(--accent);text-decoration:none;font-weight:600}
+    .password-row{display:flex;gap:8px;align-items:center}
+    .toggle-pass{background:#111;border:1px solid #222;padding:8px;border-radius:8px;color:#ddd;cursor:pointer}
+    #status{margin-top:12px;font-size:13px;color:var(--muted)}
     @media (max-width:420px){.card{padding:18px}}
-    /* small canvas background */
-    #matrixCanvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;display:block;background:transparent;}
   </style>
 </head>
 <body>
@@ -45,8 +62,18 @@
 
       <div class="field">
         <label for="password">Senha</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required />
+        <div class="password-row">
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+          <button type="button" id="togglePassword" class="toggle-pass" aria-pressed="false" aria-label="Mostrar senha">Mostrar</button>
+        </div>
         <div id="passwordError" class="error" aria-live="polite"></div>
+      </div>
+
+      <div class="row">
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;">
+          <input id="remember" name="remember" type="checkbox" />
+          Lembrar de mim
+        </label>
       </div>
 
       <div class="actions">
@@ -54,84 +81,305 @@
         <button type="button" class="secondary" id="registerBtn">Registrar</button>
       </div>
 
-      <div id="status" class="muted" aria-live="polite"></div>
+      <div id="status" aria-live="polite"></div>
     </form>
   </main>
 
   <script>
   (function(){
-    /* visual canvas (leve) */
-    const c = document.getElementById('matrixCanvas'), ctx = c.getContext('2d');
-    function fit(){ const d = devicePixelRatio||1; c.width = innerWidth*d; c.height = innerHeight*d; c.style.width = innerWidth+'px'; c.style.height = innerHeight+'px'; ctx.setTransform(d,0,0,d,0,0); }
-    window.addEventListener('resize', fit); fit();
-    // simples efeito de pontos
-    let t=0; function anim(){ ctx.clearRect(0,0,innerWidth,innerHeight); for(let i=0;i<60;i++){ const x=(i*37+t*0.5)%innerWidth, y=(Math.sin((t+i)/20)*30)+(innerHeight/2); ctx.fillStyle='rgba(255,30,30,0.03)'; ctx.fillRect(x,y,6,6);} t+=1; requestAnimationFrame(anim);} anim();
+    // Matrix + linhas background (retorna o efeito detalhado)
+    const canvas = document.getElementById('matrixCanvas');
+    const ctx = canvas.getContext('2d');
+    let width = 0, height = 0, columns = [], speeds = [], fontSize = 16;
+    const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン01@#$%&*+=-';
+    const speedMultiplier = 0.12;
+    let lines = [], linesCount = 0;
+    const mouse = { x: -9999, y: -9999 }, smooth = { x: -9999, y: -9999 };
 
-    /* credenciais admin fornecidas pelo usuário (serão hashed no cliente) */
-    const ADMIN_USERNAME = 'm64x';
-    const ADMIN_PASSWORD = 'Mur4sxz1512@';
-
-    /* IndexedDB helpers */
-    function openDB(){ return new Promise((res,rej)=>{ const r = indexedDB.open('loginDB',1); r.onupgradeneeded = ()=>{ const db = r.result; if(!db.objectStoreNames.contains('users')) db.createObjectStore('users',{keyPath:'username'}); }; r.onsuccess = ()=>res(r.result); r.onerror = ()=>rej(r.error); }); }
-    async function getUser(username){ const db = await openDB(); return new Promise((res,rej)=>{ const tx = db.transaction('users','readonly'); const store = tx.objectStore('users'); const q = store.get(username); q.onsuccess = ()=>res(q.result); q.onerror = ()=>rej(q.error); }); }
-    async function addUser(user){ const db = await openDB(); return new Promise((res,rej)=>{ const tx = db.transaction('users','readwrite'); const store = tx.objectStore('users'); const q = store.add(user); q.onsuccess = ()=>res(q.result); q.onerror = ()=>rej(q.error); }); }
-    function genSalt(){ const a = new Uint8Array(16); crypto.getRandomValues(a); return btoa(String.fromCharCode(...a)); }
-    async function hashWithSalt(password, saltBase64){ const enc = new TextEncoder(); const salt = Uint8Array.from(atob(saltBase64), c=>c.charCodeAt(0)); const p = enc.encode(password); const comb = new Uint8Array(salt.length + p.length); comb.set(salt,0); comb.set(p,salt.length); const dig = await crypto.subtle.digest('SHA-256', comb); return Array.from(new Uint8Array(dig)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
-
-    /* seed do admin (se existir, não sobrescreve) */
-    async function ensureAdmin(){
-      try{
-        const ex = await getUser(ADMIN_USERNAME);
-        if(ex) return;
-        const salt = genSalt();
-        const passHash = await hashWithSalt(ADMIN_PASSWORD, salt);
-        await addUser({ username: ADMIN_USERNAME, salt, passHash, role:'admin', created:Date.now() });
-        console.log('Admin criado em IndexedDB');
-      }catch(e){ console.error('Erro seed admin', e); }
+    function makeLines(count){
+      lines = new Array(count).fill(0).map(() => {
+        const x = Math.random() * width;
+        const y = Math.random() * height;
+        const angle = Math.random() * Math.PI * 2;
+        const len = 20 + Math.random() * 120;
+        const thickness = 0.25 + Math.random() * 1.8;
+        const baseAlpha = 0.06 + Math.random() * 0.12;
+        const cp1 = { x: (Math.random() - 0.5) * len * 1.1, y: (Math.random() - 0.5) * len * 0.9 };
+        const cp2 = { x: (Math.random() - 0.5) * len * 1.1, y: (Math.random() - 0.5) * len * 0.9 };
+        const vx = (Math.random() - 0.5) * 0.8;
+        const vy = (Math.random() - 0.5) * 0.8;
+        const angVel = (Math.random() - 0.5) * 0.018;
+        return { x, y, angle, len, thickness, baseAlpha, cp1, cp2, phase: Math.random() * Math.PI * 2, vx, vy, angVel };
+      });
     }
 
-    /* UI + auth */
-    const form = document.getElementById('loginForm'), usernameEl = document.getElementById('username'), passwordEl = document.getElementById('password');
-    const usernameError = document.getElementById('usernameError'), passwordError = document.getElementById('passwordError'), status = document.getElementById('status');
-    function show(el,msg){ el.textContent = msg; el.style.display = msg? 'block':'none'; }
-    document.getElementById('registerBtn').addEventListener('click', async ()=>{
-      show(usernameError,''); show(passwordError,''); status.textContent='';
-      const u = usernameEl.value.trim(), p = passwordEl.value;
-      if(!u){ show(usernameError,'Insira nome de usuário.'); return; }
-      if(u === ADMIN_USERNAME){ show(usernameError,'Usuário reservado.'); return; }
-      if(!p || p.length < 4){ show(passwordError,'Senha mínima 4 caracteres.'); return; }
-      status.textContent = 'Registrando...';
-      try{
-        const found = await getUser(u);
-        if(found){ status.textContent = 'Usuário já existe.'; return; }
-        const salt = genSalt(); const passHash = await hashWithSalt(p, salt);
-        await addUser({ username: u, salt, passHash, role:'user', created:Date.now() });
-        status.textContent = 'Registrado: ' + u;
-      }catch(e){ console.error(e); status.textContent = 'Erro ao registrar.'; }
-    });
+    function resize(){
+      const dpr = window.devicePixelRatio || 1;
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      fontSize = Math.max(12, Math.round(width / 90));
+      const cols = Math.ceil(width / fontSize);
+      columns = new Array(cols).fill(0).map(() => Math.random() * -50);
+      speeds = new Array(cols).fill(0).map(() => 0.2 + Math.random() * 0.8);
+      ctx.font = `${fontSize}px monospace`;
+      ctx.textBaseline = 'top';
+      linesCount = Math.max(40, Math.floor((width * height) / 9000));
+      makeLines(linesCount);
+    }
 
-    form.addEventListener('submit', async (ev)=>{
-      ev.preventDefault(); show(usernameError,''); show(passwordError,''); status.textContent='';
-      const u = usernameEl.value.trim(), p = passwordEl.value;
-      if(!u){ show(usernameError,'Por favor insira o nome de usuário.'); return; }
-      if(!p){ show(passwordError,'Por favor insira a senha.'); return; }
-      status.textContent = 'Verificando...';
-      try{
-        const user = await getUser(u);
-        if(!user){ status.textContent = 'Usuário não encontrado.'; return; }
-        const hash = await hashWithSalt(p, user.salt);
-        if(hash !== user.passHash){ status.textContent = 'Usuário ou senha incorretos.'; return; }
-        // sucesso: guarda em sessionStorage e redireciona
-        sessionStorage.setItem('user', u);
-        sessionStorage.setItem('role', user.role || 'user');
-        status.textContent = '';
-        if(user.role === 'admin') location.href = 'admin.html';
-        else location.href = 'dashboard.html';
-      }catch(e){ console.error(e); status.textContent = 'Erro ao efetuar login.'; }
-    });
+    function drawLines(){
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      for(let i = 0; i < lines.length; i++){
+        const L = lines[i];
+        L.phase += 0.035 + (i % 7) * 0.0015;
+        L.x += L.vx + Math.cos(L.phase * 0.9 + i) * 0.18;
+        L.y += L.vy + Math.sin(L.phase * 1.05 + i) * 0.12;
+        L.angle += L.angVel * (1 + Math.sin(L.phase) * 0.6);
+        if(L.x < -60) L.x = width + 60;
+        if(L.x > width + 60) L.x = -60;
+        if(L.y < -60) L.y = height + 60;
+        if(L.y > height + 60) L.y = -60;
+        const wobble = Math.sin(L.phase * (0.8 + (i % 3) * 0.15)) * (4 + (i % 3));
+        const dx = smooth.x - L.x;
+        const dy = smooth.y - L.y;
+        const dist = Math.hypot(dx, dy);
+        const radius = Math.max(width, height) * 0.32;
+        let influence = 0;
+        if(dist < radius) influence = 1 - (dist / radius);
+        influence = Math.pow(influence, 0.85);
+        const len = L.len * (1 + influence * 1.8) + wobble;
+        const alpha = Math.min(1, L.baseAlpha + influence * 1.0);
+        const thickness = Math.max(0.12, L.thickness * (1 + influence * 1.6));
+        const cx = L.x;
+        const cy = L.y;
+        const ex = cx + Math.cos(L.angle) * (len / 2) + Math.sin(L.phase) * 4;
+        const ey = cy + Math.sin(L.angle) * (len / 2) + Math.cos(L.phase) * 3;
+        const sx = cx - Math.cos(L.angle) * (len / 2) - Math.sin(L.phase) * 4;
+        const sy = cy - Math.sin(L.angle) * (len / 2) - Math.cos(L.phase) * 3;
+        const cp1x = cx + L.cp1.x * (1 + influence * 0.6) + Math.cos(L.phase) * 6;
+        const cp1y = cy + L.cp1.y * (1 + influence * 0.6) + Math.sin(L.phase) * 4;
+        const cp2x = cx + L.cp2.x * (1 + influence * 0.6) - Math.cos(L.phase) * 6;
+        const cp2y = cy + L.cp2.y * (1 + influence * 0.6) - Math.sin(L.phase) * 4;
+        const grad = ctx.createLinearGradient(sx, sy, ex, ey);
+        grad.addColorStop(0, `rgba(255,8,8,${(alpha * 0.95).toFixed(3)})`);
+        grad.addColorStop(0.6, `rgba(255,40,40,${(alpha * 0.6).toFixed(3)})`);
+        grad.addColorStop(1, `rgba(120,8,8,${(Math.min(0.35, alpha * 0.35)).toFixed(3)})`);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = thickness;
+        ctx.shadowColor = `rgba(255,45,45,${(alpha*0.9).toFixed(3)})`;
+        ctx.shadowBlur = 4 * (1 + influence);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, ex, ey);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
 
-    ensureAdmin();
+    function drawChars(){
+      ctx.save();
+      ctx.shadowColor = 'rgba(255,100,100,0.9)';
+      ctx.shadowBlur = 2;
+      ctx.fillStyle = 'rgba(255,18,18,1)';
+      for(let i = 0; i < columns.length; i++){
+        const x = i * fontSize;
+        const y = columns[i] * fontSize;
+        const char = chars.charAt(Math.floor(Math.random() * chars.length));
+        ctx.fillText(char, x, y);
+        columns[i] += speeds[i] * speedMultiplier;
+        if(columns[i] * fontSize > height && Math.random() > 0.986){
+          columns[i] = -Math.random() * 80;
+        }
+      }
+      ctx.restore();
+    }
+
+    function draw(){
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = '#020204';
+      ctx.fillRect(0, 0, width, height);
+      drawLines();
+      drawChars();
+      smooth.x += (mouse.x - smooth.x) * 0.12;
+      smooth.y += (mouse.y - smooth.y) * 0.12;
+      requestAnimationFrame(draw);
+    }
+
+    window.addEventListener('mousemove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
+    window.addEventListener('touchmove', (e) => { if(e.touches && e.touches[0]){ mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; } }, { passive: true });
+    window.addEventListener('mouseleave', () => { mouse.x = -9999; mouse.y = -9999; });
+    resize();
+    window.addEventListener('resize', resize);
+    requestAnimationFrame(draw);
   })();
+  </script>
+
+  <script>
+    (function(){
+      // admin creds (seeded into IndexedDB)
+      const ADMIN_USERNAME = 'm64x';
+      const ADMIN_PASSWORD = 'Mur4sxz1512@';
+
+      // elements
+      const form = document.getElementById('loginForm');
+      const usernameEl = document.getElementById('username');
+      const passwordEl = document.getElementById('password');
+      const usernameError = document.getElementById('usernameError');
+      const passwordError = document.getElementById('passwordError');
+      const status = document.getElementById('status');
+      const toggleBtn = document.getElementById('togglePassword');
+      const registerBtn = document.getElementById('registerBtn');
+
+      /* IndexedDB helpers */
+      function openDB(){
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open('loginDB', 1);
+          req.onupgradeneeded = () => {
+            const db = req.result;
+            if(!db.objectStoreNames.contains('users')){
+              db.createObjectStore('users', { keyPath: 'username' });
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+
+      async function getUser(username){
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('users', 'readonly');
+          const store = tx.objectStore('users');
+          const r = store.get(username);
+          r.onsuccess = () => resolve(r.result);
+          r.onerror = () => reject(r.error);
+        });
+      }
+
+      async function addUser(user){
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('users', 'readwrite');
+          const store = tx.objectStore('users');
+          const r = store.add(user);
+          r.onsuccess = () => resolve(r.result);
+          r.onerror = () => reject(r.error);
+        });
+      }
+
+      /* Crypto helpers */
+      function genSalt(){
+        const arr = new Uint8Array(16);
+        crypto.getRandomValues(arr);
+        return btoa(String.fromCharCode(...arr));
+      }
+
+      async function hashWithSalt(password, saltBase64){
+        const encoder = new TextEncoder();
+        const saltBytes = Uint8Array.from(atob(saltBase64), c => c.charCodeAt(0));
+        const passBytes = encoder.encode(password);
+        const combined = new Uint8Array(saltBytes.length + passBytes.length);
+        combined.set(saltBytes, 0);
+        combined.set(passBytes, saltBytes.length);
+        const digest = await crypto.subtle.digest('SHA-256', combined);
+        return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2,'0')).join('');
+      }
+
+      /* UI helpers */
+      function showError(el, msg){ el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
+      function clearError(el){ el.textContent = ''; el.style.display = 'none'; }
+      function setStatus(msg){ status.textContent = msg; }
+
+      // toggle password if button added in markup (keeps available)
+      if(toggleBtn){
+        toggleBtn.addEventListener('click', () => {
+          const isHidden = passwordEl.type === 'password';
+          passwordEl.type = isHidden ? 'text' : 'password';
+          toggleBtn.textContent = isHidden ? 'Ocultar' : 'Mostrar';
+          toggleBtn.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+        });
+      }
+
+      // ensure admin exists in DB
+      async function ensureAdmin(){
+        try{
+          const existing = await getUser(ADMIN_USERNAME);
+          if(existing) return;
+          const salt = genSalt();
+          const passHash = await hashWithSalt(ADMIN_PASSWORD, salt);
+          await addUser({ username: ADMIN_USERNAME, salt, passHash, role: 'admin', created: Date.now() });
+          console.log('Admin seeded');
+        }catch(err){
+          console.error('Erro ao seed admin:', err);
+        }
+      }
+
+      // register
+      registerBtn.addEventListener('click', async () => {
+        clearError(usernameError); clearError(passwordError); setStatus('');
+        const u = usernameEl.value.trim();
+        const p = passwordEl.value;
+        if(!u){ showError(usernameError, 'Insira um nome de usuário.'); return; }
+        if(u === ADMIN_USERNAME){ showError(usernameError, 'Nome de usuário reservado.'); return; }
+        if(!p || p.length < 4){ showError(passwordError, 'Senha mínima 4 caracteres.'); return; }
+
+        setStatus('Registrando...');
+        try{
+          const existing = await getUser(u);
+          if(existing){ setStatus('Usuário já existe.'); return; }
+          const salt = genSalt();
+          const passHash = await hashWithSalt(p, salt);
+          await addUser({ username: u, salt, passHash, role: 'user', created: Date.now() });
+          setStatus('Registro efetuado: ' + u);
+        }catch(err){
+          console.error(err);
+          setStatus('Erro ao registrar.');
+        }
+      });
+
+      // login submit
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        clearError(usernameError); clearError(passwordError); setStatus('');
+        const u = usernameEl.value.trim();
+        const p = passwordEl.value;
+        let valid = true;
+        if(!u){ showError(usernameError,'Por favor insira o nome de usuário.'); valid = false; }
+        if(!p){ showError(passwordError,'Por favor insira a senha.'); valid = false; }
+        if(!valid) return;
+
+        setStatus('Verificando...');
+        try{
+          const user = await getUser(u);
+          if(!user){ setStatus('Usuário não encontrado.'); return; }
+          const hash = await hashWithSalt(p, user.salt);
+          if(hash !== user.passHash){ setStatus('Usuário ou senha incorretos.'); return; }
+
+          // sucesso: marca sessão simples e redireciona
+          sessionStorage.setItem('user', u);
+          sessionStorage.setItem('role', user.role || 'user');
+          setStatus('');
+          if(user.role === 'admin'){
+            window.location.href = 'admin.html';
+          }else{
+            window.location.href = 'dashboard.html';
+          }
+        }catch(err){
+          console.error(err);
+          setStatus('Erro ao efetuar login.');
+        }
+      });
+
+      // start
+      ensureAdmin();
+    })();
   </script>
 </body>
 </html>
